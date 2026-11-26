@@ -1,0 +1,21 @@
+{
+  "name": "ryzhiy-tigr-hoi4-backend",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node src/rating.test.js",
+    "build": "echo build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "@libsql/client": "^0.14.0"
+  }
+}

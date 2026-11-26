@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>РЫЖИЙ ТИГР · HOI4 Рейтинг</title>
+<style>
+:root{--bg:#0b1020;--card:#151c33;--line:#26304f;--tx:#e6e9f5;--mu:#8b94b3;--ac:#f97316;--up:#34d399;--dn:#f87171}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+a{color:inherit;text-decoration:none}a:hover{color:var(--ac)}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--line)}
+.logo{font-weight:800;font-size:18px;color:var(--ac)}
+nav{display:flex;gap:16px}
+main{max-width:900px;margin:0 auto;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.grid{grid-template-columns:1fr}}
+.row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border:0}
+.muted,small{color:var(--mu)}
+.tabs{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
+.tab{padding:6px 14px;border-radius:99px;border:1px solid var(--line);cursor:pointer}
+.tab.on{background:var(--ac);border-color:var(--ac);color:#111}
+button,.btn,input,select{font:inherit;border-radius:8px;border:1px solid var(--line);background:#0e1429;color:var(--tx);padding:7px 12px}
+button,.btn{background:var(--ac);border-color:var(--ac);color:#111;font-weight:600;cursor:pointer;display:inline-block}
+button.sec{background:transparent;color:var(--tx);border-color:var(--line)}
+button.bad{background:transparent;color:var(--dn);border-color:var(--dn)}
+form,.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.badge{font-size:12px;padding:2px 10px;border-radius:99px;border:1px solid var(--line);color:var(--mu)}
+.up{color:var(--up)}.down{color:var(--dn)}.err{color:var(--dn)}
+table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left}
+.av{width:28px;height:28px;border-radius:50%;vertical-align:middle;margin-right:6px;background:var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="#/">🐯 РЫЖИЙ ТИГР · HOI4</a>
+  <nav><a href="#/">Матчи</a><a href="#/leaders">Лидеры</a></nav>
+  <div id="user"></div>
+</header>
+<main id="app">Загрузка…</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ST = {open:'Набор', in_progress:'Идёт', finished:'Завершён', cancelled:'Отменён'};
+const app = $('#app');
+let me = null, tab = 'open';
+
+async function api(path, method = 'GET', body) {
+  const r = await fetch(path, {method, headers: body ? {'Content-Type':'application/json'} : {}, body: body ? JSON.stringify(body) : undefined});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Ошибка');
+  return d;
+}
+const av = (u) => u.avatar ? `<img class="av" src="https://cdn.discordapp.com/avatars/${esc(u.id)}/${esc(u.avatar)}.png?size=64" alt="">` : '';
+const when = (iso) => iso ? new Date(iso).toLocaleString('ru-RU', {dateStyle:'medium', timeStyle:'short'}) : '';
+
+async function loadMe() {
+  try { me = await api('/api/me'); } catch { me = null; }
+  $('#user').innerHTML = me
+    ? `<a href="#/player/${esc(me.id)}">${av(me)}${esc(me.username)}</a> <b>${me.rating}</b> <button class="sec" onclick="logout()">Выйти</button>`
+    : `<a class="btn" href="/auth/discord">Войти через Discord</a>`;
+}
+async function logout() { await api('/auth/logout', 'POST', {}); await loadMe(); route(); }
+
+async function matches() {
+  const list = await api('/api/matches?status=' + tab);
+  const tabs = Object.keys(ST).map((k) => `<span class="tab ${k === tab ? 'on' : ''}" onclick="tab='${k}';route()">${ST[k]}</span>`).join('');
+  const create = me ? `<div class="card"><b>Новый матч</b><form onsubmit="createMatch(event)" style="margin-top:8px">
+    <input id="t" placeholder="Название" required minlength="3" maxlength="80">
+    <select id="n">${[1,2,3,4,5,6,8,10,12,16].map((n) => `<option value="${n}">${n}×${n}</option>`).join('')}</select>
+    <input id="d" type="datetime-local"><button>Создать</button></form></div>` : `<p class="muted">Войдите через Discord, чтобы создавать матчи и играть.</p>`;
+  app.innerHTML = create + `<div class="tabs">${tabs}</div>` + (list.map((m) => `<a href="#/match/${esc(m.id)}" class="card" style="display:block">
+    <div class="bar" style="justify-content:space-between"><b>${esc(m.title)}</b><span class="badge">${ST[m.status]}</span></div>
+    <small>Организатор: ${esc(m.host_name)} · игроков ${m.players_count}/${m.team_size * 2} · ${m.scheduled_at ? when(m.scheduled_at) : 'время не назначено'}</small></a>`).join('') || '<p class="muted">Матчей нет.</p>');
+}
+async function createMatch(e) {
+  e.preventDefault();
+  try {
+    const d = $('#d').value;
+    const m = await api('/api/matches', 'POST', {title: $('#t').value, team_size: +$('#n').value, scheduled_at: d ? new Date(d).toISOString() : undefined});
+    location.hash = '#/match/' + m.id;
+  } catch (er) { alert(er.message); }
+}
+
+async function matchPage(id) {
+  const m = await api('/api/matches/' + id);
+  const mine = me && m.players.find((p) => p.user_id === me.id);
+  const manage = me && (me.isAdmin || me.id === m.host_id);
+  const side = (s) => {
+    const ps = m.players.filter((p) => p.side === s);
+    return `<div class="card"><h3 style="margin-top:0">Сторона ${s} ${m.winner === s ? '🏆' : ''} <small>${ps.length}/${m.team_size}</small></h3>` +
+      (ps.map((p) => `<div class="row"><a href="#/player/${esc(p.user_id)}">${esc(p.username)}</a><span>${esc(p.country || '—')} · ${p.rating}
+        ${p.rating_delta != null ? `<b class="${p.rating_delta >= 0 ? 'up' : 'down'}">${p.rating_delta > 0 ? '+' : ''}${p.rating_delta}</b>` : ''}</span></div>`).join('') || '<p class="muted">Пусто</p>') + '</div>';
+  };
+  let act = '';
+  if (m.status === 'open' && me && !mine) act += `<form onsubmit="join(event,'${esc(m.id)}')"><select id="s"><option>A</option><option>B</option></select>
+    <input id="c" placeholder="Страна (GER)" maxlength="3" size="12"><button>Занять место</button></form>`;
+  if (m.status === 'open' && mine) act += `<button class="sec" onclick="doAct('${esc(m.id)}','leave')">Выйти из матча</button> `;
+  if (manage && m.status === 'open') act += `<button onclick="doAct('${esc(m.id)}','start')">Начать матч</button> `;
+  if (manage && m.status === 'in_progress') act += `<button onclick="doAct('${esc(m.id)}','result',{winner:'A'})">Победила A</button> <button onclick="doAct('${esc(m.id)}','result',{winner:'B'})">Победила B</button> `;
+  if (manage && ['open', 'in_progress'].includes(m.status)) act += `<button class="bad" onclick="if(confirm('Отменить матч?'))doAct('${esc(m.id)}','cancel')">Отменить</button>`;
+  app.innerHTML = `<a href="#/" class="muted">← К матчам</a><h2>${esc(m.title)} <span class="badge">${ST[m.status]}</span></h2>
+    <p class="muted">Организатор: ${esc(m.host_name)} · ${m.scheduled_at ? when(m.scheduled_at) : 'время не назначено'}</p>
+    <div class="grid">${side('A')}${side('B')}</div>${act ? `<div class="card bar">${act}</div>` : ''}
+    ${!me && m.status === 'open' ? '<p class="muted">Войдите через Discord, чтобы занять место.</p>' : ''}`;
+}
+async function doAct(id, a, body) {
+  try { await api(`/api/matches/${id}/${a}`, 'POST', body || {}); await loadMe(); route(); } catch (e) { alert(e.message); }
+}
+async function join(e, id) {
+  e.preventDefault();
+  await doAct(id, 'join', {side: $('#s').value, country: $('#c').value.trim() || undefined});
+}
+
+async function leaders() {
+  const l = await api('/api/leaderboard');
+  app.innerHTML = '<h2>Таблица лидеров</h2>' + (l.length ? `<div class="card"><table><tr><th>#</th><th>Игрок</th><th>Рейтинг</th><th>П</th><th>Пор</th></tr>` +
+    l.map((u, i) => `<tr><td>${i + 1}</td><td><a href="#/player/${esc(u.id)}">${av(u)}${esc(u.username)}</a></td><td><b>${u.rating}</b></td><td>${u.wins}</td><td>${u.losses}</td></tr>`).join('') + '</table></div>'
+    : '<p class="muted">Пока нет сыгранных матчей.</p>');
+}
+async function player(id) {
+  const u = await api('/api/players/' + id);
+  app.innerHTML = `<h2>${av(u)}${esc(u.username)}</h2><div class="card bar"><b style="font-size:22px">${u.rating}</b><span class="muted">рейтинг</span> · <span class="up">${u.wins} побед</span> · <span class="down">${u.losses} поражений</span></div>
+    <h3>Последние матчи</h3>` + (u.history.map((h) => `<a href="#/match/${esc(h.id)}" class="card bar" style="justify-content:space-between"><span>${esc(h.title)} <small>${esc(h.country || '')}</small></span>
+    <b class="${h.rating_delta >= 0 ? 'up' : 'down'}">${h.rating_delta > 0 ? '+' : ''}${h.rating_delta}</b></a>`).join('') || '<p class="muted">Матчей пока нет.</p>');
+}
+
+async function route() {
+  const [p, id] = location.hash.slice(2).split('/');
+  try {
+    if (p === 'match') await matchPage(id); else if (p === 'leaders') await leaders(); else if (p === 'player') await player(id); else await matches();
+  } catch (e) { app.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+window.addEventListener('hashchange', route);
+loadMe().then(route);
+</script>
+</body>
+</html>
